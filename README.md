@@ -10,22 +10,20 @@
 
 # TG WS Proxy
 
-Локальный SOCKS5-прокси для Telegram Desktop, который перенаправляет трафик через WebSocket-соединения к указанным серверам, помогая частично ускорить работу Telegram.  
-  
-**Ожидаемый результат аналогичен прокидыванию hosts для Web Telegram**: ускорение загрузки и скачивания файлов, загрузки сообщений и части медиа.
+**Локальный SOCKS5-прокси** для Telegram Desktop, который **ускоряет работу Telegram**, перенаправляя трафик через WebSocket-соединения. Данные передаются в том же зашифрованном виде, а для работы не нужны сторонние сервера.
 
 <img width="529" height="487" alt="image" src="https://github.com/user-attachments/assets/6a4cf683-0df8-43af-86c1-0e8f08682b62" />
 
 ## Как это работает
 
 ```
-Telegram Desktop → SOCKS5 (127.0.0.1:1080) → TG WS Proxy → WSS (kws*.web.telegram.org) → Telegram DC
+Telegram Desktop → SOCKS5 (127.0.0.1:1080) → TG WS Proxy → WSS → Telegram DC
 ```
 
 1. Приложение поднимает локальный SOCKS5-прокси на `127.0.0.1:1080`
 2. Перехватывает подключения к IP-адресам Telegram
 3. Извлекает DC ID из MTProto obfuscation init-пакета
-4. Устанавливает WebSocket (TLS) соединение к соответствующему DC через домены `kws{N}.web.telegram.org`
+4. Устанавливает WebSocket (TLS) соединение к соответствующему DC через домены Telegram
 5. Если WS недоступен (302 redirect) — автоматически переключается на прямое TCP-соединение
 
 ## 🚀 Быстрый старт
@@ -42,25 +40,6 @@ Telegram Desktop → SOCKS5 (127.0.0.1:1080) → TG WS Proxy → WSS (kws*.web.t
 - **Открыть логи** — открыть файл логов
 - **Выход** — остановить прокси и закрыть приложение
 
-## Установка из исходников
-
-> Для Windows:
-
-```bash
-pip install -r requirements.txt
-```
-
-> Для MacOS:
-```bash
-pip install -r requirements-macos.txt
-```
-
-### Windows (Tray-приложение)
-
-```bash
-python windows.py
-```
-
 ### MacOS (Tray-приложение)
 
 Перейдите на [страницу релизов](https://github.com/Flowseal/tg-ws-proxy/releases) и скачайте **`TgWsProxy.dmg`** — универсальная сборка для Apple Silicon и Intel.
@@ -69,7 +48,7 @@ python windows.py
 2. Перенести **TG WS Proxy.app** в папку **Applications**
 3. При первом запуске macOS может попросить подтвердить открытие: **Системные настройки → Конфиденциальность и безопасность → Всё равно открыть**
 
-### Консольный режим (Windows)
+### Консольный режим из исходников
 
 ```bash
 python proxy/tg_ws_proxy.py [--port PORT] [--dc-ip DC:IP ...] [-v]
@@ -94,11 +73,6 @@ python proxy/tg_ws_proxy.py --port 9050 --dc-ip 1:149.154.175.205 --dc-ip 2:149.
 
 # С подробным логированием
 python proxy/tg_ws_proxy.py -v
-```
-
-### Консольный режим (MacOS)
-```bash
-python macos.py
 ```
 
 ## Настройка Telegram Desktop
@@ -133,34 +107,7 @@ Tray-приложение хранит данные в `%APPDATA%/TgWsProxy`:
 
 ## Автоматическая сборка
 
-Проект содержит спецификацию PyInstaller ([`windows.spec`](packaging/windows.spec)) и GitHub Actions workflow ([`.github/workflows/build.yml`](.github/workflows/build.yml)) для автоматической сборки.
-
-> Для Windows:
-
-```bash
-pip install pyinstaller
-pyinstaller packaging/windows.spec
-```
-
-> Для MacOS:
-```bash
-pip install pyinstaller
-packaging/create_icon.sh
-pyinstaller packaging/macos.spec
-```
-
-> Создать универсальный DMG (local-тест с двумя копями одной архитектуры):
-```bash
-pip install pyinstaller
-packaging/create_icon.sh
-pyinstaller packaging/macos.spec --noconfirm
-cp -R "dist/TG WS Proxy.app" "dist/TG WS Proxy-intel.app"
-packaging/merge_universal2.sh \
-    "dist/TG WS Proxy.app" \
-    "dist/TG WS Proxy-intel.app" \
-    "dist/TG WS Proxy-universal.app"
-```
-- В результате в папке `dist/` появятся `.app` под текущую архитектуру и `TgWsProxy.dmg`.
+Проект содержит спецификации PyInstaller ([`packaging/windows.spec`](packaging/windows.spec), [`packaging/macos.spec`](packaging/macos.spec)) и GitHub Actions workflow ([`.github/workflows/build.yml`](.github/workflows/build.yml)) для автоматической сборки.
 
 ## Лицензия
 
