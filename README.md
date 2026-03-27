@@ -156,6 +156,12 @@ tg-ws-proxy-tray-macos = "macos:main"
 tg-ws-proxy-tray-linux = "linux:main"
 ```
 
+## Структура исходников (tray)
+
+Общая логика tray-приложений (пути данных, один экземпляр процесса, конфиг, логирование, поток с прокси, IPv6, фоновая проверка релизов) находится в `utils/tray_*.py`; вспомогательные части UI — в `ui/tray_*.py`. Точки входа по ОС: `windows.py`, `linux.py`, `macos.py`.
+
+Для согласованных окончаний строк в репозитории используются `.editorconfig` и `.gitattributes` (LF).
+
 ## Настройка Telegram Desktop
 
 ### Автоматически
