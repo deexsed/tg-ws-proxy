@@ -17,6 +17,7 @@ import psutil
 import proxy.tg_ws_proxy as tg_ws_proxy
 from proxy import __version__
 from utils.default_config import default_tray_config
+from utils.tray_proxy_state import ProxyRuntimeState
 
 log = logging.getLogger("tg-ws-tray")
 
@@ -59,11 +60,28 @@ def _same_process(meta: dict, proc: psutil.Process, script_hint: str) -> bool:
     except Exception:
         return False
     if IS_FROZEN:
-        return APP_NAME.lower() in proc.name().lower()
+        try:
+            return os.path.basename(sys.executable).lower() == proc.name().lower()
+        except Exception:
+            return APP_NAME.lower() in proc.name().lower()
     try:
         for arg in proc.cmdline():
             if script_hint in arg:
                 return True
+    except Exception:
+        pass
+    try:
+        proc_exe = proc.exe()
+        if proc_exe and sys.executable:
+            if os.path.normcase(os.path.abspath(proc_exe)) == os.path.normcase(
+                os.path.abspath(sys.executable)
+            ):
+                try:
+                    joined = " ".join(proc.cmdline())
+                except Exception:
+                    joined = ""
+                if script_hint and script_hint.lower() in joined.lower():
+                    return True
     except Exception:
         pass
     return False
@@ -85,11 +103,44 @@ def acquire_lock(script_hint: str = "") -> bool:
                 meta = json.loads(raw)
         except Exception:
             pass
+        if not psutil.pid_exists(pid):
+            f.unlink(missing_ok=True)
+            continue
         try:
-            if _same_process(meta, psutil.Process(pid), script_hint):
+            proc = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            f.unlink(missing_ok=True)
+            continue
+        except Exception:
+            # PID жив, но не удалось получить процесс: безопаснее считать lock занятым.
+            if psutil.pid_exists(pid):
+                return False
+            f.unlink(missing_ok=True)
+            continue
+
+        # Если lock записан старым процессом (PID reused) — считаем lock устаревшим.
+        try:
+            lock_ct = float(meta.get("create_time", 0.0))
+            if lock_ct > 0 and abs(lock_ct - proc.create_time()) > 1.0:
+                f.unlink(missing_ok=True)
+                continue
+        except Exception:
+            pass
+
+        try:
+            if _same_process(meta, proc, script_hint):
                 return False
         except Exception:
             pass
+
+        # PID живой, но мы не уверены, что это "наш" процесс:
+        # не удаляем lock, чтобы не запускать второй экземпляр.
+        try:
+            if proc.is_running():
+                return False
+        except Exception:
+            return False
+
         f.unlink(missing_ok=True)
 
     lock_file = APP_DIR / f"{os.getpid()}.lock"
@@ -223,6 +274,7 @@ def load_icon():
 
 _proxy_thread: Optional[threading.Thread] = None
 _async_stop: Optional[Tuple[asyncio.AbstractEventLoop, asyncio.Event]] = None
+_proxy_state = ProxyRuntimeState()
 
 
 def _run_proxy_thread(on_port_busy: Callable[[str], None]) -> None:
@@ -233,20 +285,31 @@ def _run_proxy_thread(on_port_busy: Callable[[str], None]) -> None:
     stop_ev = asyncio.Event()
     _async_stop = (loop, stop_ev)
 
+    had_exception = False
+
+    def _on_listening() -> None:
+        _proxy_state.set_listening()
+
     try:
-        loop.run_until_complete(tg_ws_proxy._run(stop_event=stop_ev))
+        loop.run_until_complete(tg_ws_proxy._run(stop_event=stop_ev, on_listening=_on_listening))
     except Exception as exc:
+        had_exception = True
         log.error("Proxy thread crashed: %s", exc)
-        if "Address already in use" in str(exc) or "10048" in str(exc):
+        msg = str(exc)
+        if "Address already in use" in msg or "10048" in msg or "10013" in msg:
+            _proxy_state.set_error("Порт занят")
             on_port_busy(
                 "Не удалось запустить прокси:\n"
                 "Порт уже используется другим приложением.\n\n"
                 "Закройте приложение, использующее этот порт, "
                 "или измените порт в настройках прокси и перезапустите."
             )
+        else:
+            _proxy_state.set_error(msg)
     finally:
         loop.close()
         _async_stop = None
+        _proxy_state.mark_idle_after_thread(had_exception=had_exception)
 
 
 def apply_proxy_config(cfg: dict) -> bool:
@@ -273,7 +336,9 @@ def start_proxy(cfg: dict, on_error: Callable[[str], None]) -> None:
         log.info("Proxy already running")
         return
 
+    _proxy_state.reset_for_start()
     if not apply_proxy_config(cfg):
+        _proxy_state.set_error("Ошибка конфигурации DC -> IP.")
         on_error("Ошибка конфигурации DC → IP.")
         return
 
@@ -287,11 +352,19 @@ def start_proxy(cfg: dict, on_error: Callable[[str], None]) -> None:
 
 def stop_proxy() -> None:
     global _proxy_thread, _async_stop
+    _proxy_state.set_stopping()
+    if _proxy_thread and _proxy_thread.is_alive() and _async_stop is None:
+        # Коротко ждем инициализации _async_stop в только что запущенном потоке,
+        # чтобы корректно отправить stop_event и не получить двойной запуск.
+        for _ in range(50):
+            if _async_stop is not None or not _proxy_thread.is_alive():
+                break
+            time.sleep(0.01)
     if _async_stop:
         loop, stop_ev = _async_stop
         loop.call_soon_threadsafe(stop_ev.set)
-        if _proxy_thread:
-            _proxy_thread.join(timeout=5)
+    if _proxy_thread:
+        _proxy_thread.join(timeout=5)
     _proxy_thread = None
     log.info("Proxy stopped")
 
@@ -301,6 +374,10 @@ def restart_proxy(cfg: dict, on_error: Callable[[str], None]) -> None:
     stop_proxy()
     time.sleep(0.3)
     start_proxy(cfg, on_error)
+
+
+def get_proxy_state() -> ProxyRuntimeState:
+    return _proxy_state
 
 
 def tg_proxy_url(cfg: dict) -> str:

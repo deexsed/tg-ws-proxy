@@ -1011,17 +1011,31 @@ _server_instance = None
 _server_stop_event = None
 
 
-async def _run(stop_event: Optional[asyncio.Event] = None):
+async def _run(
+    stop_event: Optional[asyncio.Event] = None,
+    on_listening=None,
+):
     global _server_instance, _server_stop_event
     _server_stop_event = stop_event
+    ws_blacklist.clear()
+    dc_fail_until.clear()
 
     secret_bytes = bytes.fromhex(proxy_config.secret)
 
+    client_tasks: Set[asyncio.Task] = set()
+
     def client_cb(r, w):
-        asyncio.create_task(_handle_client(r, w, secret_bytes))
+        t = asyncio.create_task(_handle_client(r, w, secret_bytes))
+        client_tasks.add(t)
+        t.add_done_callback(client_tasks.discard)
 
     server = await asyncio.start_server(client_cb, proxy_config.host, proxy_config.port)
     _server_instance = server
+    if on_listening is not None:
+        try:
+            on_listening()
+        except Exception:
+            pass
 
     for sock in server.sockets:
         try:
@@ -1072,6 +1086,10 @@ async def _run(stop_event: Optional[asyncio.Event] = None):
                 if stop_task in done:
                     server.close()
                     await server.wait_closed()
+                    if client_tasks:
+                        for task in tuple(client_tasks):
+                            task.cancel()
+                        await asyncio.gather(*tuple(client_tasks), return_exceptions=True)
                     if not serve_task.done():
                         serve_task.cancel()
                         try:
@@ -1092,6 +1110,17 @@ async def _run(stop_event: Optional[asyncio.Event] = None):
             await log_stats_task
         except asyncio.CancelledError:
             pass
+        # На перезапуске гасим все оставшиеся задачи до закрытия loop,
+        # иначе получаем "Task was destroyed but it is pending".
+        cur = asyncio.current_task()
+        pending = [
+            t for t in asyncio.all_tasks()
+            if t is not cur and not t.done()
+        ]
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
     _server_instance = None
 
 

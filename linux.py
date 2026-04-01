@@ -7,20 +7,36 @@ import threading
 import time
 from typing import Optional
 
-import customtkinter as ctk
-import pyperclip
-import pystray
-from PIL import Image, ImageTk
+try:
+    import customtkinter as ctk
+except ImportError:
+    ctk = None
+
+try:
+    import pyperclip
+except ImportError:
+    pyperclip = None
+
+try:
+    import pystray
+except ImportError:
+    pystray = None
+
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = ImageTk = None
 
 import proxy.tg_ws_proxy as tg_ws_proxy
 
 from utils.tray_common import (
     APP_NAME, DEFAULT_CONFIG, FIRST_RUN_MARKER, LOG_FILE,
     acquire_lock, bootstrap, check_ipv6_warning, ctk_run_dialog,
-    ensure_ctk_thread, ensure_dirs, load_config, load_icon, log,
+    ensure_ctk_thread, ensure_dirs, get_proxy_state, load_config, load_icon, log,
     maybe_notify_update, quit_ctk, release_lock, restart_proxy,
     save_config, start_proxy, stop_proxy, tg_proxy_url,
 )
+from ui.tray_icons import apply_status_badge, normalize_tray_icon_image
 from ui.ctk_tray_ui import (
     install_tray_config_buttons, install_tray_config_form,
     populate_first_run_window, tray_settings_scroll_and_footer,
@@ -32,6 +48,8 @@ from ui.ctk_theme import (
 )
 
 _tray_icon: Optional[object] = None
+_tray_base_icon: Optional[object] = None
+_last_tray_icon_phase: Optional[str] = None
 _config: dict = {}
 _exiting = False
 
@@ -78,6 +96,12 @@ def _apply_window_icon(root) -> None:
 def _on_open_in_telegram(icon=None, item=None) -> None:
     url = tg_proxy_url(_config)
     log.info("Copying %s", url)
+    if pyperclip is None:
+        _show_error(
+            "Не удалось скопировать ссылку: модуль pyperclip не установлен.\n\n"
+            f"Откройте вручную:\n{url}"
+        )
+        return
     try:
         pyperclip.copy(url)
         _show_info(
@@ -91,6 +115,9 @@ def _on_open_in_telegram(icon=None, item=None) -> None:
 def _on_copy_link(icon=None, item=None) -> None:
     url = tg_proxy_url(_config)
     log.info("Copying link: %s", url)
+    if pyperclip is None:
+        _show_error("Установите пакет pyperclip для копирования в буфер обмена.")
+        return
     try:
         pyperclip.copy(url)
     except Exception as exc:
@@ -119,6 +146,19 @@ def _on_open_logs(icon=None, item=None) -> None:
         )
     else:
         _show_info("Файл логов ещё не создан.")
+
+
+def _tray_refresh_visuals() -> None:
+    global _last_tray_icon_phase
+    if _tray_icon is None or _exiting:
+        return
+    try:
+        phase = get_proxy_state().snapshot()["phase"]
+        if _tray_base_icon is not None and phase != _last_tray_icon_phase:
+            _tray_icon.icon = apply_status_badge(_tray_base_icon, phase)
+            _last_tray_icon_phase = phase
+    except Exception:
+        pass
 
 
 def _on_exit(icon=None, item=None) -> None:
@@ -244,13 +284,13 @@ def _build_menu():
 
 
 def run_tray() -> None:
-    global _tray_icon, _config
+    global _tray_icon, _tray_base_icon, _last_tray_icon_phase, _config
 
     _config = load_config()
     bootstrap(_config)
 
-    if pystray is None or Image is None:
-        log.error("pystray or Pillow not installed; running in console mode")
+    if pystray is None or Image is None or ctk is None:
+        log.error("pystray, Pillow or customtkinter not installed; running in console mode")
         start_proxy(_config, _show_error)
         try:
             while True:
@@ -264,7 +304,14 @@ def run_tray() -> None:
     _show_first_run()
     check_ipv6_warning(_show_info)
 
-    _tray_icon = pystray.Icon(APP_NAME, load_icon(), "TG WS Proxy", menu=_build_menu())
+    raw_icon = load_icon()
+    _tray_base_icon = normalize_tray_icon_image(raw_icon)
+    phase0 = get_proxy_state().snapshot()["phase"]
+    icon_image = apply_status_badge(_tray_base_icon, phase0)
+    _last_tray_icon_phase = phase0
+    _tray_icon = pystray.Icon(APP_NAME, icon_image, "", menu=_build_menu())
+    get_proxy_state().subscribe(lambda _phase: _tray_refresh_visuals())
+    _tray_refresh_visuals()
     log.info("Tray icon running")
     _tray_icon.run()
 

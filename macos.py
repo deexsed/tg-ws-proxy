@@ -29,17 +29,18 @@ from proxy import __version__
 
 from utils.tray_common import (
     APP_DIR, APP_NAME, DEFAULT_CONFIG, FIRST_RUN_MARKER, IPV6_WARN_MARKER,
-    LOG_FILE, acquire_lock, apply_proxy_config, ensure_dirs, load_config,
-    log, release_lock, save_config, setup_logging, stop_proxy, tg_proxy_url,
+    LOG_FILE, acquire_lock, ensure_dirs, get_proxy_state, load_config,
+    load_icon, log, release_lock, restart_proxy, save_config, setup_logging,
+    start_proxy, stop_proxy, tg_proxy_url,
 )
+from ui.tray_icons import apply_status_badge, normalize_tray_icon_image
 
 MENUBAR_ICON_PATH = APP_DIR / "menubar_icon.png"
 
-_proxy_thread: Optional[threading.Thread] = None
-_async_stop: Optional[object] = None
 _app: Optional[object] = None
 _config: dict = {}
 _exiting: bool = False
+_menu_icon_paths: dict[str, str] = {}
 
 # osascript dialogs
 
@@ -141,63 +142,45 @@ def _ensure_menubar_icon() -> None:
         img.save(str(MENUBAR_ICON_PATH), "PNG")
 
 
-# proxy lifecycle (macOS-local)
-
-import asyncio as _asyncio
-
-
-def _run_proxy_thread() -> None:
-    global _async_stop
-    loop = _asyncio.new_event_loop()
-    _asyncio.set_event_loop(loop)
-    stop_ev = _asyncio.Event()
-    _async_stop = (loop, stop_ev)
-    try:
-        loop.run_until_complete(tg_ws_proxy._run(stop_event=stop_ev))
-    except Exception as exc:
-        log.error("Proxy thread crashed: %s", exc)
-        if "Address already in use" in str(exc):
-            _show_error(
-                "Не удалось запустить прокси:\n"
-                "Порт уже используется другим приложением.\n\n"
-                "Закройте приложение, использующее этот порт, "
-                "или измените порт в настройках прокси и перезапустите."
-            )
-    finally:
-        loop.close()
-        _async_stop = None
-
-
 def _start_proxy() -> None:
-    global _proxy_thread
-    if _proxy_thread and _proxy_thread.is_alive():
-        log.info("Proxy already running")
-        return
-    if not apply_proxy_config(_config):
-        _show_error("Ошибка конфигурации DC → IP.")
-        return
-    pc = tg_ws_proxy.proxy_config
-    log.info("Starting proxy on %s:%d ...", pc.host, pc.port)
-    _proxy_thread = threading.Thread(target=_run_proxy_thread, daemon=True, name="proxy")
-    _proxy_thread.start()
+    start_proxy(_config, _show_error)
 
 
 def _stop_proxy() -> None:
-    global _proxy_thread, _async_stop
-    if _async_stop:
-        loop, stop_ev = _async_stop
-        loop.call_soon_threadsafe(stop_ev.set)
-        if _proxy_thread:
-            _proxy_thread.join(timeout=2)
-    _proxy_thread = None
-    log.info("Proxy stopped")
+    stop_proxy()
 
 
 def _restart_proxy() -> None:
-    log.info("Restarting proxy...")
-    _stop_proxy()
-    time.sleep(0.3)
-    _start_proxy()
+    restart_proxy(_config, _show_error)
+
+
+def _ensure_badged_menubar_icons() -> None:
+    if _menu_icon_paths:
+        return
+    if Image is None:
+        return
+    ensure_dirs()
+    base = normalize_tray_icon_image(load_icon())
+    for phase in ("idle", "starting", "listening", "error", "stopping"):
+        img = apply_status_badge(base, phase)
+        p = APP_DIR / f"menubar_icon_{phase}.png"
+        try:
+            img.save(str(p), "PNG")
+            _menu_icon_paths[phase] = str(p)
+        except Exception:
+            pass
+
+
+def _refresh_menubar_icon() -> None:
+    if _app is None:
+        return
+    phase = get_proxy_state().snapshot()["phase"]
+    icon_path = _menu_icon_paths.get(phase)
+    if icon_path:
+        try:
+            _app.icon = icon_path
+        except Exception:
+            pass
 
 
 # menu callbacks
@@ -491,8 +474,11 @@ _TgWsProxyAppBase = rumps.App if rumps else object
 
 class TgWsProxyApp(_TgWsProxyAppBase):
     def __init__(self):
-        _ensure_menubar_icon()
-        icon_path = str(MENUBAR_ICON_PATH) if MENUBAR_ICON_PATH.exists() else None
+        _ensure_badged_menubar_icons()
+        icon_path = _menu_icon_paths.get(get_proxy_state().snapshot()["phase"])
+        if not icon_path:
+            _ensure_menubar_icon()
+            icon_path = str(MENUBAR_ICON_PATH) if MENUBAR_ICON_PATH.exists() else None
 
         host = _config.get("host", DEFAULT_CONFIG["host"])
         port = _config.get("port", DEFAULT_CONFIG["port"])
@@ -579,6 +565,8 @@ def run_menubar() -> None:
     _check_ipv6_warning()
 
     _app = TgWsProxyApp()
+    get_proxy_state().subscribe(lambda _phase: _refresh_menubar_icon())
+    _refresh_menubar_icon()
     log.info("Menubar app running")
     _app.run()
 
