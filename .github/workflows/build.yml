@@ -33,7 +33,7 @@ jobs:
         run: pip install .
 
       - name: Install pyinstaller
-        run: pip install "pyinstaller==6.13.0"
+        run: pip install "pyinstaller==6.16.0"
 
       - name: Build EXE with PyInstaller
         run: pyinstaller packaging/windows.spec --noconfirm
@@ -145,7 +145,7 @@ jobs:
 
           python3.12 -m pip install --no-deps wheelhouse/universal2/*.whl
           python3.12 -m pip install .
-          python3.12 -m pip install pyinstaller==6.13.0
+          python3.12 -m pip install pyinstaller==6.16.0
 
       - name: Create macOS icon from ICO
         run: |
@@ -247,7 +247,7 @@ jobs:
         run: |
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install .
-          .venv/bin/pip install "pyinstaller==6.13.0"
+          .venv/bin/pip install "pyinstaller==6.16.0"
 
       - name: Build binary with PyInstaller
         run: .venv/bin/pyinstaller packaging/linux.spec --noconfirm
