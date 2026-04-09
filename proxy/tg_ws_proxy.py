@@ -494,9 +494,7 @@ async def _run(stop_event: Optional[asyncio.Event] = None):
         try:
             while True:
                 await asyncio.sleep(60)
-                bl = ', '.join(
-                    f'DC{d}{"m" if m else ""}'
-                    for d, m in sorted(ws_blacklist)) or 'none'
+                bl = ', '.join(f'DC{k}' for k in sorted(ws_blacklist)) or 'none'
                 log.info("stats: %s | ws_bl: %s", stats.summary(), bl)
         except asyncio.CancelledError:
             raise
