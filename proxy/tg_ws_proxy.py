@@ -99,8 +99,6 @@ def _generate_relay_init(proto_tag: bytes, dc_idx: int) -> bytes:
     return bytes(result)
 
 
-
-
 def _ws_domains(dc: int, is_media) -> List[str]:
     if dc == 203:
         dc = 2
