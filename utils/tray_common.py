@@ -391,7 +391,7 @@ def maybe_notify_update(
             ):
                 webbrowser.open(url)
         except Exception as exc:
-            log.debug("Update check failed: %s", repr(exc))
+            log.warning("Update check failed: %s", repr(exc))
 
     threading.Thread(target=_work, daemon=True, name="update-check").start()
 

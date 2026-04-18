@@ -312,7 +312,7 @@ async def _handle_client(reader, writer, secret: bytes):
         result = _try_handshake(handshake, secret)
         if result is None:
             stats.connections_bad += 1
-            log.debug("[%s] bad handshake (wrong secret or proto)", label)
+            log.warning("[%s] bad handshake (wrong secret or proto)", label)
             try:
                 drain_src = tls_stream or reader
                 while await drain_src.read(4096):
