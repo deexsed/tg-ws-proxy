@@ -1,295 +1,34 @@
-name: Issue Triage
+name: Auto comment on new issues
 
 on:
   issues:
-    types:
-      - opened
-      - labeled
-  issue_comment:
-    types:
-      - created
+    types: [opened]
 
 permissions:
   issues: write
 
 jobs:
-  question-auto-reply:
-    if: |
-      github.event_name == 'issues' &&
-      contains(github.event.issue.labels.*.name, 'type: вопрос') &&
-      github.event.issue.user.type != 'Bot'
+  comment:
     runs-on: ubuntu-latest
     steps:
-      - name: Add support comment
-        uses: actions/github-script@v8
+      - name: Comment on new issue
+        uses: peter-evans/create-or-update-comment@v5
         with:
-          script: |
-            const issueNumber = context.payload.issue.number;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            Спасибо за issue и за помощь проекту ❤️
 
-            const marker = "<!-- triage-question-auto-reply -->";
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
+            Чтобы не терять ваше время, сначала проверьте две вещи:
+            - вы на последней версии: [Releases](https://github.com/${{ github.repository }}/releases)
+            - запускали по инструкции для своей ОС: [Quick start](https://github.com/${{ github.repository }}/blob/main/docs/README.md#-быстрый-старт)
 
-            const alreadyPosted = comments.some(
-              (c) =>
-                c.user?.type === "Bot" &&
-                typeof c.body === "string" &&
-                c.body.includes(marker),
-            );
+            Если проблема осталась, пожалуйста, допишите в этот issue:
+            - версию `tg-ws-proxy`;
+            - вашу ОС и способ запуска (релизный бинарник / из исходников);
+            - короткое описание, как воспроизвести проблему (если возможно);
+            - лог/текст ошибки или скриншот.
 
-            if (alreadyPosted) {
-              core.info("Auto-reply already exists, skipping.");
-              return;
-            }
+            Частый кейс: если не грузит медиа в Telegram, проверьте раздел в документации  
+            «Не грузит фото/видео?» — [README](https://github.com/${{ github.repository }}/blob/main/docs/README.md#не-грузит-фотовидео).
 
-            const body = `${marker}
-            Спасибо за вопрос! Мы посмотрим его как можно скорее.
-
-            Чтобы ускорить ответ, пожалуйста, убедитесь, что в issue есть:
-            - версия TG WS Proxy;
-            - операционная система;
-            - что уже было проверено;
-            - лог/скриншот (если есть ошибка).
-
-            Полезные разделы документации:
-            - https://github.com/${owner}/${repo}/blob/main/docs/README.md
-            - https://github.com/${owner}/${repo}/blob/main/docs/CfProxy.md`;
-
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: issueNumber,
-              body,
-            });
-
-  bug-auto-reply:
-    if: |
-      github.event_name == 'issues' &&
-      contains(github.event.issue.labels.*.name, 'type: проблема') &&
-      github.event.issue.user.type != 'Bot'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Add bug triage comment
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const issueNumber = context.payload.issue.number;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const issueBody = context.payload.issue.body || "";
-
-            const marker = "<!-- triage-bug-auto-reply -->";
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
-
-            const alreadyPosted = comments.some(
-              (c) =>
-                c.user?.type === "Bot" &&
-                typeof c.body === "string" &&
-                c.body.includes(marker),
-            );
-
-            if (alreadyPosted) {
-              core.info("Auto-reply already exists, skipping.");
-              return;
-            }
-
-            function extractSection(title) {
-              const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              const re = new RegExp(`### ${escaped}\\r?\\n\\r?\\n([\\s\\S]*?)(?=\\r?\\n### |$)`, "m");
-              const match = issueBody.match(re);
-              if (!match) return "";
-              return match[1].trim();
-            }
-
-            const appVersion = extractSection("Версия TG WS Proxy");
-            const additions = extractSection("Дополнительные детали");
-
-            const noResponseValues = new Set(["", "_No response_", "No response"]);
-            const missingVersion = noResponseValues.has(appVersion);
-            const missingLogs = noResponseValues.has(additions);
-
-            const missingParts = [];
-            if (missingVersion) missingParts.push("- версия TG WS Proxy");
-            if (missingLogs) missingParts.push("- лог/скриншот или текст ошибки");
-
-            const extraRequest = missingParts.length
-              ? `\nЧтобы ускорить диагностику, пожалуйста, дополните issue:\n${missingParts.join("\n")}\n`
-              : "";
-
-            const body = `${marker}
-            Спасибо за баг-репорт! Мы посмотрим его как можно скорее.
-
-            ${extraRequest}
-
-            Полезные разделы документации:
-            - https://github.com/${owner}/${repo}/blob/main/docs/README.md
-            - https://github.com/${owner}/${repo}/blob/main/docs/CfProxy.md`;
-
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: issueNumber,
-              body,
-            });
-
-  feature-auto-reply:
-    if: |
-      github.event_name == 'issues' &&
-      contains(github.event.issue.labels.*.name, 'type: предложение') &&
-      github.event.issue.user.type != 'Bot'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Add feature triage comment
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const issueNumber = context.payload.issue.number;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-
-            const marker = "<!-- triage-feature-auto-reply -->";
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
-
-            const alreadyPosted = comments.some(
-              (c) =>
-                c.user?.type === "Bot" &&
-                typeof c.body === "string" &&
-                c.body.includes(marker),
-            );
-
-            if (alreadyPosted) {
-              core.info("Auto-reply already exists, skipping.");
-              return;
-            }
-
-            const body = `${marker}
-            Спасибо за предложение! Мы рассмотрим его в рамках triage.
-
-            Чтобы ускорить принятие решения, полезно добавить:
-            - сценарий использования;
-            - ожидаемую пользу для пользователей;
-            - возможные альтернативы.
-
-            Полезный раздел:
-            - https://github.com/${owner}/${repo}/blob/main/CONTRIBUTING.md`;
-
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: issueNumber,
-              body,
-            });
-
-  status-in-progress-on-maintainer-comment:
-    if: |
-      github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request == null &&
-      contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Ensure status label exists and apply
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const issueNumber = context.payload.issue.number;
-            const statusLabel = "status: в работе";
-            const needsTriageLabel = "status: нуждается в сортировке";
-            const currentCommentId = context.payload.comment.id;
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
-
-            const maintainerCommentsBeforeCurrent = comments.filter(
-              (c) =>
-                c.id !== currentCommentId &&
-                ["OWNER", "MEMBER", "COLLABORATOR"].includes(c.author_association),
-            );
-
-            if (maintainerCommentsBeforeCurrent.length > 0) {
-              core.info("Not first maintainer comment, skipping status transition.");
-              return;
-            }
-
-            try {
-              await github.rest.issues.getLabel({
-                owner,
-                repo,
-                name: statusLabel,
-              });
-            } catch (error) {
-              if (error.status === 404) {
-                await github.rest.issues.createLabel({
-                  owner,
-                  repo,
-                  name: statusLabel,
-                  color: "1D76DB",
-                  description: "Issue в активной работе",
-                });
-              } else {
-                throw error;
-              }
-            }
-
-            try {
-              await github.rest.issues.getLabel({
-                owner,
-                repo,
-                name: needsTriageLabel,
-              });
-            } catch (error) {
-              if (error.status === 404) {
-                await github.rest.issues.createLabel({
-                  owner,
-                  repo,
-                  name: needsTriageLabel,
-                  color: "FBCA04",
-                  description: "Issue ожидает первичного triage",
-                });
-              } else {
-                throw error;
-              }
-            }
-
-            const currentLabels = (context.payload.issue.labels || []).map((l) => l.name);
-            if (currentLabels.includes(statusLabel)) {
-              core.info("Status label already set, skipping.");
-              return;
-            }
-
-            await github.rest.issues.addLabels({
-              owner,
-              repo,
-              issue_number: issueNumber,
-              labels: [statusLabel],
-            });
-
-            if (currentLabels.includes(needsTriageLabel)) {
-              await github.rest.issues.removeLabel({
-                owner,
-                repo,
-                issue_number: issueNumber,
-                name: needsTriageLabel,
-              });
-            }
+            После этого мы сможем быстрее воспроизвести проблему и дать точный ответ.

@@ -27,8 +27,11 @@
 
 ## Навигация
 
-- [Быстрый старт по ОС](#-быстрый-старт): [Windows](./README.windows.md), [macOS](./README.macos.md), [Linux](./README.linux.md)
-- [Настройка Cloudflare-домена (CfProxy)](./CfProxy.md)
+### **🚀 Быстрый старт**
+  - **[Windows](./README.windows.md)**
+  - **[macOS](./README.macos.md)**
+  - **[Linux](./README.linux.md)**
+- [Настройка Cloudflare-домена (CF-прокси)](./CfProxy.md)
 - [Fake TLS + upstream в Nginx](./FakeTlsNginx.md)
 - [Файлы конфигурации Tray-приложения](./TrayConfig.md)
 - [Установка из исходников](./BuildFromSource.md)
@@ -53,23 +56,6 @@ Telegram Desktop → MTProto Proxy (127.0.0.1:1443) → WebSocket → Telegram D
 > Подобная проблема встречается на аккаунтах без Premium  
 > Если это не помогло, настройте собственный домен по инструкции: [CfProxy.md](./CfProxy.md)
 
-## 🚀 Быстрый старт
-
-Выберите свою ОС:
-
-- [Windows](./README.windows.md)
-- [macOS](./README.macos.md)
-- [Linux](./README.linux.md)
-
-## Установка из исходников
-
-- [Инструкция по установке из исходников](./BuildFromSource.md)
-
-## Дополнительные инструкции
-
-- [Fake TLS + upstream в Nginx](./FakeTlsNginx.md)
-- [Файлы конфигурации Tray-приложения](./TrayConfig.md)
-
 ## Автоматическая сборка
 
 Проект содержит спецификации PyInstaller ([`packaging/windows.spec`](../packaging/windows.spec), [`packaging/macos.spec`](../packaging/macos.spec), [`packaging/linux.spec`](../packaging/linux.spec)) и GitHub Actions workflow ([`.github/workflows/build.yml`](../.github/workflows/build.yml)) для автоматической сборки.
@@ -82,6 +68,14 @@ Telegram Desktop → MTProto Proxy (127.0.0.1:1443) → WebSocket → Telegram D
 - Intel macOS 10.15+
 - Apple Silicon macOS 11.0+
 - Linux x86_64 (требуется AppIndicator для системного трея)
+
+## Контрибьюторы
+
+Спасибо всем, кто помогает развивать проект ❤️
+
+<a href="https://github.com/Flowseal/tg-ws-proxy/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Flowseal/tg-ws-proxy" />
+</a>
 
 ## Лицензия
 
