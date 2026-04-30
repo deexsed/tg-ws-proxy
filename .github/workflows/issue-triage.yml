@@ -20,7 +20,7 @@ jobs:
 
             Чтобы не терять ваше время, сначала проверьте две вещи:
             - вы на последней версии: [Releases](https://github.com/${{ github.repository }}/releases)
-            - запускали по инструкции для своей ОС: [Quick start](https://github.com/${{ github.repository }}/blob/main/docs/README.md#-быстрый-старт)
+            - запускали по инструкции для своей ОС: [Быстрый старт](https://github.com/${{ github.repository }}/blob/main/docs/README.md#-быстрый-старт)
 
             Если проблема осталась, пожалуйста, допишите в этот issue:
             - версию `tg-ws-proxy`;

@@ -27,7 +27,7 @@
 
 ## Навигация
 
-### **🚀 Быстрый старт**
+- **🚀 Быстрый старт**
   - **[Windows](./README.windows.md)**
   - **[macOS](./README.macos.md)**
   - **[Linux](./README.linux.md)**
