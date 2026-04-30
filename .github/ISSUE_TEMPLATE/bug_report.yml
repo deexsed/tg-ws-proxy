@@ -4,12 +4,55 @@ description: Сообщить о проблеме
 labels: ['type: проблема', 'status: нуждается в сортировке']
 
 body:
-  - type: textarea
-    id: description
+  - type: input
+    id: app_version
     attributes:
-      label: Опишите вашу проблему
-      description: Чётко опишите проблему с которой вы столкнулись
-      placeholder: Описание проблемы
+      label: Версия TG WS Proxy
+      description: Укажите версию приложения (например, v1.2.3)
+      placeholder: vX.Y.Z
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Операционная система
+      description: На какой ОС воспроизводится проблема?
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Другая
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги для воспроизведения
+      description: Опишите шаги, после которых возникает проблема
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+      description: Что должно было произойти?
+      placeholder: Кратко опишите ожидаемый результат
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Фактическое поведение
+      description: Что произошло на самом деле?
+      placeholder: Кратко опишите фактический результат
     validations:
       required: true
 
@@ -17,4 +60,4 @@ body:
     id: additions
     attributes:
       label: Дополнительные детали
-      description: Если у вас проблемы с работой прокси, то приложите файл логов в момент возникновения проблемы.
+      description: Приложите дополнительные детали (логи, скриншоты, текст ошибок). Для проблем с прокси добавьте лог-файл на момент возникновения проблемы.
