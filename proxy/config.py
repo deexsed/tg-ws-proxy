@@ -35,7 +35,6 @@ def _dd(s: str) -> str:
 
 CFPROXY_DEFAULT_DOMAINS: List[str] = [_dd(d) for d in _CFPROXY_ENC]
 _CFPROXY_MIN_VALID_DOMAINS = 3
-_cfproxy_last_good_domains: List[str] = list(CFPROXY_DEFAULT_DOMAINS)
 
 
 @dataclass
@@ -109,32 +108,26 @@ def _normalize_domain_pool(domains: List[str]) -> List[str]:
 
 
 def refresh_cfproxy_domains() -> None:
-    global _cfproxy_last_good_domains
-
     if proxy_config.cfproxy_user_domain:
         return
 
     fetched = _fetch_cfproxy_domain_list()
     pool = _normalize_domain_pool(fetched)
     if len(pool) >= _CFPROXY_MIN_VALID_DOMAINS:
-        _cfproxy_last_good_domains = pool
         balancer.update_domains_list(pool)
         log.info("CF proxy domain pool updated from GitHub (%d domains)", len(pool))
         return
 
-    fallback_pool = _cfproxy_last_good_domains or CFPROXY_DEFAULT_DOMAINS
-    balancer.update_domains_list(fallback_pool)
     if fetched:
         log.warning(
             "Ignoring fetched CF proxy domains due to low-quality payload "
-            "(total=%d, valid=%d, required>=%d); using fallback pool (%d domains)",
-            len(fetched), len(pool), _CFPROXY_MIN_VALID_DOMAINS, len(fallback_pool),
+            "(total=%d, valid=%d, required>=%d); keeping current domain pool",
+            len(fetched), len(pool), _CFPROXY_MIN_VALID_DOMAINS,
         )
     else:
         log.warning(
             "CF proxy domain refresh failed or empty response; "
-            "using fallback pool (%d domains)",
-            len(fallback_pool),
+            "keeping current domain pool",
         )
 
 
@@ -142,12 +135,11 @@ _refresh_stop: threading.Event = threading.Event()
 
 
 def start_cfproxy_domain_refresh() -> None:
-    global _refresh_stop, _cfproxy_last_good_domains
+    global _refresh_stop
     _refresh_stop.set()
     _refresh_stop = threading.Event()
     stop = _refresh_stop
 
-    _cfproxy_last_good_domains = list(CFPROXY_DEFAULT_DOMAINS)
     balancer.update_domains_list(CFPROXY_DEFAULT_DOMAINS)
 
     def _loop():
