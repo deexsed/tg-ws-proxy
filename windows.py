@@ -8,8 +8,11 @@ import threading
 import time
 import webbrowser
 import winreg
+import tempfile
+
 from pathlib import Path
 from typing import Optional
+from proxy.utils import build_github_opener
 
 try:
     import pyperclip
@@ -219,9 +222,6 @@ def update_ctk_form(
 
 
 def _perform_update(download_url: str, set_status=None) -> None:
-    import tempfile
-    import urllib.request
-
     def _step(msg: str) -> None:
         log.info("Update: %s", msg)
         if set_status:
@@ -244,7 +244,14 @@ def _perform_update(download_url: str, set_status=None) -> None:
         os.close(fd)
         tmp_path = Path(tmp_name)
         log.info("Downloading update from %s", download_url)
-        urllib.request.urlretrieve(download_url, str(tmp_path))
+        opener = build_github_opener()
+        with opener.open(download_url) as _resp:
+            with open(str(tmp_path), "wb") as _fout:
+                while True:
+                    _chunk = _resp.read(65536)
+                    if not _chunk:
+                        break
+                    _fout.write(_chunk)
     except Exception as exc:
         _err(f"Не удалось скачать:\n{exc}")
         if tmp_path:
