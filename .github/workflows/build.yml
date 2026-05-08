@@ -365,7 +365,7 @@ jobs:
           VERSION="${{ github.event.inputs.version }}"
           VERSION="${VERSION#v}"
           
-          sudo gem install fpm
+          sudo gem install fpm -v 1.17.0
           
           mkdir -p rpm_package/usr/bin
           mkdir -p rpm_package/usr/share/applications
@@ -414,7 +414,7 @@ jobs:
               -v ${VERSION} \
               --iteration 1 \
               --architecture x86_64 \
-              --license "Proprietary" \
+              --license "MIT" \
               --vendor "Flowseal" \
               --maintainer "Flowseal" \
               --url "https://github.com/Flowseal/tg-ws-proxy" \
